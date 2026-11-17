@@ -382,6 +382,9 @@ function initHeadingSplits() {
       type: 'lines, words',
       mask: 'lines',
       autoSplit: true,
+      // Words stay whole, so screen readers still read the text. 'auto' would
+      // put an aria-label on a plain div, which Lighthouse flags as prohibited.
+      aria: 'none',
       onSplit(self) {
         keepTextIndent(heading, self.lines);
         // Once a heading has revealed, later re-splits (resize, font load)
@@ -475,6 +478,7 @@ function initVerticalHeadingSplits() {
       type: 'words',
       mask: 'words',
       autoSplit: true,
+      aria: 'none', // see the horizontal heading split above
       onSplit(self) {
         const padPx = padVerticalMasks(heading, self.masks || []);
         if (entry.played || !self.words.length) return;
