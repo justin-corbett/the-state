@@ -1399,7 +1399,16 @@ function initNavScroll() {
 
   const ease = registerEases();
   let scrolled = false;
-  gsap.set(crest, { autoAlpha: 0 });
+  // Below 992px (the mobile nav) the logo is always the small crest; above
+  // it, the full logo shows at the top of the page and the crest once
+  // scrolled.
+  const desktop = window.matchMedia('(min-width: 992px)');
+  const logoTo = (showCrest, instant) => {
+    const vars = { duration: instant ? 0 : NAV_SCROLL.duration, ease, overwrite: 'auto' };
+    gsap.to(primary, { autoAlpha: showCrest ? 0 : 1, ...vars });
+    gsap.to(crest, { autoAlpha: showCrest ? 1 : 0, ...vars });
+  };
+  logoTo(!desktop.matches, true);
 
   // CTA colours, read from the Webflow variables so a palette change carries
   // through.
@@ -1445,8 +1454,7 @@ function initNavScroll() {
         duration: NAV_SCROLL.duration, ease, overwrite: 'auto',
       });
     }
-    gsap.to(primary, { autoAlpha: next ? 0 : 1, duration: NAV_SCROLL.duration, ease, overwrite: 'auto' });
-    gsap.to(crest, { autoAlpha: next ? 1 : 0, duration: NAV_SCROLL.duration, ease, overwrite: 'auto' });
+    logoTo(next || !desktop.matches);
   };
 
   // Only the start line matters. With an end at 'max', reaching the very
@@ -1461,8 +1469,9 @@ function initNavScroll() {
 
   // Crossing the 992px breakpoint: show the links again below it, and match
   // the scroll state above it.
-  window.matchMedia('(min-width: 992px)').addEventListener('change', () => {
+  desktop.addEventListener('change', () => {
     toLinks(scrolled || navOverFooter);
+    logoTo(scrolled || !desktop.matches, true);
   });
 }
 
