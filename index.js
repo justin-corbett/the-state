@@ -185,33 +185,94 @@ registerEases();
 // -----------------------------------------
 // The hero's scroll container is sticky, so it stays pinned while the
 // .scroll-track scrolls past it. Across that scroll the image grows from its
-// designed size (set in Webflow) to fill the viewport.
+// designed size (set in Webflow) to fill the screen.
+//
+// It used to animate the image's width and height, which makes the browser
+// re-lay-out the page and re-scale the photo on every frame: smooth on a
+// desktop, laggy in iOS Safari. Now the image is laid out once, at the size
+// that covers the screen with the photo's own proportions, and only a scale
+// (transform) and a crop (clip-path) change as you scroll. Neither causes
+// layout, and the transform runs on the GPU. The maths reproduces the old
+// look exactly: at every point the visible window is the size the image box
+// used to be, showing the photo cropped and scaled the way object-fit: cover
+// showed it.
+const HERO_GROW = { hero: '.section-hero_home', track: '.scroll-track', img: '.hero-img', frame: '.scroll-container' };
+
 function initHeroGrow() {
   if (typeof window.gsap === 'undefined' || !hasScrollTrigger) return;
   gsap.registerPlugin(ScrollTrigger);
 
-  const hero = document.querySelector('.section-hero_home');
+  const hero = document.querySelector(HERO_GROW.hero);
   if (!hero) return;
-  const track = hero.querySelector('.scroll-track');
-  const img = hero.querySelector('.hero-img');
+  const track = hero.querySelector(HERO_GROW.track);
+  const img = hero.querySelector(HERO_GROW.img);
+  const frame = img && (img.closest(HERO_GROW.frame) || hero);
   if (!track || !img) return;
+
+  // On phones the toolbar sliding in and out changes the viewport height;
+  // without this every change re-measures the whole page mid-scroll.
+  ScrollTrigger.config({ ignoreMobileResize: true });
+
+  let size = null; // measured sizes, null until the image has loaded
+
+  const reset = () => {
+    gsap.set(img, { clearProps: 'width,height,maxWidth,maxHeight,transform,clipPath,willChange,objectFit' });
+  };
+
+  // Measure the designed box and the full-screen target, then lay the image
+  // out once at the photo's own proportions, just covering the screen.
+  const measure = () => {
+    reset();
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    if (!iw || !ih) { size = null; return; }
+    const box = img.getBoundingClientRect();
+    const W = frame.clientWidth;
+    const H = frame.clientHeight;
+    const cover = Math.max(W / iw, H / ih);
+    size = { w0: box.width, h0: box.height, W, H, iw, ih, cover, bw: iw * cover, bh: ih * cover };
+    gsap.set(img, {
+      width: size.bw, height: size.bh, maxWidth: 'none', maxHeight: 'none',
+      objectFit: 'fill', willChange: 'transform', transformOrigin: '50% 50%',
+    });
+  };
+
+  // p runs 0 → 1 across the scroll. The box the old animation drew at p is
+  // w × h; object-fit: cover scaled the photo by k inside it. Scaling the big
+  // image by k / cover gives the photo that same scale, and the crop leaves
+  // exactly a w × h window showing, centred, as before.
+  const render = (p) => {
+    if (!size) return;
+    const { w0, h0, W, H, iw, ih, cover, bw, bh } = size;
+    const w = w0 + (W - w0) * p;
+    const h = h0 + (H - h0) * p;
+    const k = Math.max(w / iw, h / ih);
+    const s = k / cover;
+    const x = Math.max(0, (bw - w / s) / 2);
+    const y = Math.max(0, (bh - h / s) / 2);
+    img.style.transform = `scale(${s})`;
+    img.style.clipPath = `inset(${y}px ${x}px)`;
+  };
 
   const mm = gsap.matchMedia();
   mm.add('(prefers-reduced-motion: no-preference)', () => {
-    gsap.to(img, {
-      width: '100vw',
-      height: '100vh',
-      ease: 'none', // linear, so the size tracks the scroll evenly
-      scrollTrigger: {
-        trigger: track,
-        start: 'top top',
-        end: 'bottom bottom',
-        scrub: true,
-        // Re-measure the starting size when the viewport changes, since the
-        // image is a different size at each breakpoint.
-        invalidateOnRefresh: true,
-      },
+    const st = ScrollTrigger.create({
+      trigger: track,
+      start: 'top top',
+      end: 'bottom bottom',
+      // Re-measure whenever ScrollTrigger re-measures the page (breakpoints
+      // change the designed size).
+      onRefreshInit: reset,
+      onRefresh: (self) => { measure(); render(self.progress); },
+      onUpdate: (self) => render(self.progress),
     });
+    if (!img.complete || !img.naturalWidth) {
+      img.addEventListener('load', () => { measure(); render(st.progress); }, { once: true });
+    } else {
+      measure();
+      render(st.progress);
+    }
+    return () => { st.kill(); reset(); size = null; };
   });
 }
 
