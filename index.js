@@ -1319,12 +1319,32 @@ function initBeforeAfter() {
     wrapBeforeAfterParallax(section, [images.before, images.after].filter(Boolean));
     if (!links.length || !images.before || !images.after) return;
 
-    // Load both now, so the hidden one is ready before it's first clicked,
-    // rather than lazy-loading (and showing nothing) mid-fade.
-    Object.values(images).forEach((img) => {
-      img.loading = 'eager';
-      if (img.decode) img.decode().catch(() => {});
-    });
+    // Load both before the section is reached, so the hidden one is ready
+    // before it's first clicked rather than lazy-loading (and showing nothing)
+    // mid-fade. Not straight away, though: these are big images, and fetching
+    // them during the first paint holds up the hero. Start when the section is
+    // a couple of screens away, or once the page is loaded and idle.
+    let warmed = false;
+    const warm = () => {
+      if (warmed) return;
+      warmed = true;
+      Object.values(images).forEach((img) => {
+        img.loading = 'eager';
+        if (img.decode) img.decode().catch(() => {});
+      });
+    };
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        warm();
+      }, { rootMargin: '200% 0px' });
+      io.observe(section);
+    }
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1));
+    const afterLoad = () => setTimeout(() => idle(warm, { timeout: 2000 }), 1500);
+    if (document.readyState === 'complete') afterLoad();
+    else window.addEventListener('load', afterLoad, { once: true });
 
     let current = 'after';
 
