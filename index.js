@@ -216,7 +216,7 @@ function initHeroGrow() {
   let size = null; // measured sizes, null until the image has loaded
 
   const reset = () => {
-    gsap.set(img, { clearProps: 'width,height,maxWidth,maxHeight,transform,clipPath,willChange,objectFit' });
+    gsap.set(img, { clearProps: 'width,height,maxWidth,maxHeight,minWidth,minHeight,flexShrink,transform,clipPath,willChange,objectFit' });
   };
 
   // Measure the designed box and the full-screen target, then lay the image
@@ -231,8 +231,12 @@ function initHeroGrow() {
     const H = frame.clientHeight;
     const cover = Math.max(W / iw, H / ih);
     size = { w0: box.width, h0: box.height, W, H, iw, ih, cover, bw: iw * cover, bh: ih * cover };
+    // flexShrink 0: the image sits in a flex container that is only as wide
+    // as the screen on phones, which would otherwise squeeze it back down to
+    // fit and leave the crop with nothing to show.
     gsap.set(img, {
-      width: size.bw, height: size.bh, maxWidth: 'none', maxHeight: 'none',
+      width: size.bw, height: size.bh, minWidth: size.bw, minHeight: size.bh,
+      maxWidth: 'none', maxHeight: 'none', flexShrink: 0,
       objectFit: 'fill', willChange: 'transform', transformOrigin: '50% 50%',
     });
   };
