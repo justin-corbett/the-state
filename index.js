@@ -1907,6 +1907,36 @@ function initFloorImageHover() {
 afterDomContentLoaded(initFloorImageHover);
 
 // -----------------------------------------
+// FLOORPLAN IMAGES AFTER LOAD
+// -----------------------------------------
+// The floorplan modals are fixed overlays hidden with opacity, so the browser
+// treats their lazy images as on screen and fetches every full-size PNG at page
+// load, competing with the hero. The site head CSS keeps them display:none
+// until <html> has .floorplans-ready (an open modal always shows its own).
+// This adds the class once the page has loaded and gone idle, or sooner when
+// the pointer or a finger reaches the Leasing Opportunities list.
+function initFloorplanDefer() {
+  const root = document.documentElement;
+  let done = false;
+  const ready = () => {
+    if (done) return;
+    done = true;
+    root.classList.add('floorplans-ready');
+  };
+  const list = document.querySelector('.floor-collection-list');
+  if (list) {
+    ['pointerenter', 'touchstart', 'focusin'].forEach((type) =>
+      list.addEventListener(type, ready, { once: true, passive: true }));
+  }
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1));
+  const afterLoad = () => setTimeout(() => idle(ready, { timeout: 2000 }), 3000);
+  if (document.readyState === 'complete') afterLoad();
+  else window.addEventListener('load', afterLoad, { once: true });
+}
+
+afterDomContentLoaded(initFloorplanDefer);
+
+// -----------------------------------------
 // LEASED ROW FILL ON SCROLL
 // -----------------------------------------
 // A fully leased floor's row has a fixed blue-grey background. Instead of it
